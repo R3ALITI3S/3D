@@ -24,6 +24,9 @@ public class PlayerMover : MonoBehaviour
    private CharacterController controller;
    private Animator anim;
 
+   // New jump control variables
+   private bool isJumping = false; // Ensures jump only triggers once until landing
+
    private void Start()
    {
       controller = GetComponent<CharacterController>();
@@ -43,8 +46,13 @@ public class PlayerMover : MonoBehaviour
       // Update the "IsJumping" parameter based on grounded state
       anim.SetBool("IsJumping", !isGrounded);
 
-      if (isGrounded && velocity.y < 0)
+      // Reset jump status when grounded
+      if (isGrounded)
       {
+         if (isJumping && velocity.y < 0) // Only reset when actually landing
+         {
+            isJumping = false;
+         }
          velocity.y = -2f;
       }
 
@@ -70,7 +78,8 @@ public class PlayerMover : MonoBehaviour
          
          moveDirection *= moveSpeed;
          
-         if(Input.GetKeyDown(KeyCode.Space))
+         // Check for jump input, only allow if grounded and not already jumping
+         if(Input.GetKeyDown(KeyCode.Space) && !isJumping)
          {
             Jump();
          }
@@ -105,6 +114,6 @@ public class PlayerMover : MonoBehaviour
    {
       velocity.y = Mathf.Sqrt(jumpHeight * -2 * gravity);
       anim.SetBool("IsJumping", true); // Set jumping animation
+      isJumping = true; // Prevent re-triggering jump until grounded
    }
 }
-
