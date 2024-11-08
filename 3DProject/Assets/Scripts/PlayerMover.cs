@@ -15,6 +15,12 @@ public class PlayerMover : MonoBehaviour
    [SerializeField] private LayerMask groundMask;
    [SerializeField] private float gravity;
    
+   public Transform cameraTransform;        // Reference to the camera transform
+   public float jumpCameraOffset = 0.2f;    // Camera offset when jumping
+   public float landCameraOffset = -0.2f;   // Camera offset when landing
+   public float cameraReturnSpeed = 5f;     //
+   private Vector3 initialCameraPosition; 
+   
    [SerializeField] private float jumpHeight;
    
    private Vector3 moveDirection;
@@ -29,6 +35,7 @@ public class PlayerMover : MonoBehaviour
 
    private void Start()
    {
+      initialCameraPosition = cameraTransform.localPosition;
       controller = GetComponent<CharacterController>();
       anim = GetComponentInChildren<Animator>();
    }
@@ -36,31 +43,40 @@ public class PlayerMover : MonoBehaviour
    private void Update()
    {
       Move();
+      // Check if player has landed
+      if (isJumping && velocity.y <= 0 && isGrounded)
+      {
+         OnLand();
+      }
    }
 
    private void Move()
    {
-      // Check if grounded
+      // Check if grounded and update IsJumping based on that
       isGrounded = Physics.CheckSphere(transform.position, groundCheckDistance, groundMask);
 
-      // Update the "IsJumping" parameter based on grounded state
-      anim.SetBool("IsJumping", !isGrounded);
-
-      // Reset jump status when grounded
-      if (isGrounded)
+      // If grounded, reset vertical velocity and jumping state
+      if (isGrounded && velocity.y < 0)
       {
-         if (isJumping && velocity.y < 0) // Only reset when actually landing
+         velocity.y = -2f;   // Apply a slight downward force to help stay grounded
+         if (isJumping)
          {
-            isJumping = false;
+            isJumping = false;    // Reset jumping flag
+            anim.SetBool("IsJumping", false); // Update animation to return to blend tree
          }
-         velocity.y = -2f;
       }
+      else if (!isGrounded)
+      {
+         // Apply gravity if not grounded
+         velocity.y += gravity * Time.deltaTime;
+      }
+      
 
-      // Get input for forward/backward and left/right movement
-      float moveZ = Input.GetAxis("Vertical");   // For forward and backward movement
-      float moveX = Input.GetAxis("Horizontal"); // For left and right movement
-      moveDirection = new Vector3(moveX, 0, moveZ).normalized; // Normalize to prevent faster diagonal movement
-
+      // Handle movement input
+      float moveZ = Input.GetAxis("Vertical");
+      float moveX = Input.GetAxis("Horizontal");
+      moveDirection = new Vector3(moveX, 0, moveZ).normalized;
+      //moveDirection = transform.TransformDirection(moveDirection);
       if (isGrounded)
       {
          if (moveDirection != Vector3.zero && Input.GetKey(KeyCode.LeftShift))
@@ -75,22 +91,23 @@ public class PlayerMover : MonoBehaviour
          {
             Idle();
          }
-         
+
+         // Apply movement speed based on walking or running
          moveDirection *= moveSpeed;
-         
-         // Check for jump input, only allow if grounded and not already jumping
-         if(Input.GetKeyDown(KeyCode.Space) && !isJumping)
+
+         // Jumping input
+         if (Input.GetKeyDown(KeyCode.Space) && !isJumping)
          {
             Jump();
          }
       }
 
-      // Move the player in the calculated direction and apply gravity
-      Vector3 move = transform.TransformDirection(moveDirection); // Convert local to world space
+      // Convert move direction to world space and apply it
+      Vector3 move = transform.TransformDirection(moveDirection);
       controller.Move(move * Time.deltaTime);
-      
-      velocity.y += gravity * Time.deltaTime;
-      controller.Move(velocity * Time.deltaTime);
+
+      // Apply only the Y component of velocity to handle jumping and gravity
+      controller.Move(new Vector3(0, velocity.y, 0) * Time.deltaTime);
    }
 
    private void Idle()
@@ -109,11 +126,27 @@ public class PlayerMover : MonoBehaviour
       moveSpeed = runSpeed;
       anim.SetFloat("Speed", 1, 0.1f, Time.deltaTime);
    }
-
+   
    private void Jump()
    {
+      // Calculate jump velocity based on desired height and gravity
       velocity.y = Mathf.Sqrt(jumpHeight * -2 * gravity);
-      anim.SetBool("IsJumping", true); // Set jumping animation
-      isJumping = true; // Prevent re-triggering jump until grounded
+      anim.SetBool("IsJumping", true);   // Set jumping animation
+      isJumping = true;                  // Prevent multiple jumps until landing
+      cameraTransform.localPosition = initialCameraPosition + new Vector3(0, jumpCameraOffset, 0);
+   }
+   private void OnLand()
+   {
+      anim.SetBool("IsJumping", false);     // Reset jumping animation
+      isJumping = false;
+
+      // Move the camera down slightly when landing
+      cameraTransform.localPosition = initialCameraPosition + new Vector3(0, landCameraOffset, 0);
+   }
+
+   private void LateUpdate()
+   {
+      // Smoothly return the camera to its original position
+      cameraTransform.localPosition = Vector3.Lerp(cameraTransform.localPosition, initialCameraPosition, Time.deltaTime * cameraReturnSpeed);
    }
 }
